@@ -1,0 +1,30 @@
+{
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  },
+  "name": "jogging_routes",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.1",
+    "undici-types": "^8.3.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "try": "tsx --env-file=.env src/scripts/tryRoute.ts",
+    "server": "tsx watch --env-file=.env src/server/index.ts",
+    "start": "tsx src/server/index.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
