@@ -25,5 +25,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "../src"]
+  "include": ["src", "../src/types.ts", "../src/geo.ts"]
 }
