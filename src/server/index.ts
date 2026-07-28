@@ -1,12 +1,13 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { buildDeps } from "./deps";
 import { createPlanHandler } from "./planHandler";
-import rateLimit from "express-rate-limit";
 
 const app = express();
 app.set("trust proxy", 1);
-app.use("/api/plan", rateLimit({ windowMs: 10 * 60 * 1000, limit: 20 }));
 app.use(express.json());
+
+app.use("/api/plan", rateLimit({ windowMs: 10 * 60 * 1000, limit: 20 }));
 
 const deps = buildDeps();
 

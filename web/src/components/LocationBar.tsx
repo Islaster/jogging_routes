@@ -10,10 +10,6 @@ export function LocationBar({ state, onRequest }: Props) {
     return (
       <div className="locbar ok">
         <span>📍 Starting from your location</span>
-        <small>
-          {state.position.lat.toFixed(4)}, {state.position.lng.toFixed(4)} · ±
-          {Math.round(state.accuracyM)}m
-        </small>
         <button className="link" onClick={onRequest}>
           Update
         </button>

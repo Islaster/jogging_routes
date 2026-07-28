@@ -1,5 +1,7 @@
-import { destination, MILES_TO_M } from "@core/geo";
+import { destination } from "@core/geo/bearing";
 import type { PlannerApi, RouteView } from "./types";
+
+const MILES_TO_M = 1609.344;
 
 function syntheticLoop(
   start: { lat: number; lng: number },
@@ -66,6 +68,20 @@ export function createFixtureApi(delayMs = 600): PlannerApi {
           breakdown: { distance: 0.9, terrain: 0.8, roads: p.ratio },
         })
       );
+    },
+    async reroute(req, waypoints) {
+      await new Promise((r) => setTimeout(r, 300));
+      const path = [req.start, ...waypoints, req.start];
+      return {
+        id: "fixture-edit",
+        path,
+        miles: req.miles,
+        gainFt: 150,
+        ftPerMile: 150 / req.miles,
+        sideRoadRatio: 0.85,
+        score: 0.8,
+        breakdown: { distance: 0.9, terrain: 0.8, roads: 0.85 },
+      };
     },
   };
 }

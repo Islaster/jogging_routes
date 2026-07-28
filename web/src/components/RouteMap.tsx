@@ -3,15 +3,27 @@ import { RoutePolyline } from "./RoutePolyline";
 import { FitBounds } from "./FitBounds";
 import type { LatLng, RouteView } from "../api";
 import { Recenter } from "./Recenter";
+import { EditHandles } from "./EditHandles";
 
 interface Props {
   start: LatLng;
   routes: RouteView[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  editPins?: LatLng[];
+  onMovePin?: (index: number, pos: LatLng) => void;
+  editing?: boolean;
 }
 
-export function RouteMap({ start, routes, selectedId, onSelect }: Props) {
+export function RouteMap({
+  start,
+  routes,
+  selectedId,
+  onSelect,
+  editPins,
+  onMovePin,
+  editing,
+}: Props) {
   const selected = routes.find((r) => r.id === selectedId) ?? routes[0];
 
   return (
@@ -39,6 +51,10 @@ export function RouteMap({ start, routes, selectedId, onSelect }: Props) {
             />
           ))}
 
+        {editing && editPins && onMovePin && (
+          <EditHandles pins={editPins} onMove={onMovePin} />
+        )}
+
         {selected && (
           <RoutePolyline
             path={selected.path}
@@ -52,7 +68,7 @@ export function RouteMap({ start, routes, selectedId, onSelect }: Props) {
           <div className="start-dot" />
         </AdvancedMarker>
         <Recenter center={start} active={routes.length === 0} />
-        {selected && <FitBounds path={selected.path} />}
+        {selected && !editing && <FitBounds path={selected.path} />}
       </Map>
     </APIProvider>
   );

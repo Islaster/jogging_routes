@@ -166,3 +166,21 @@ body,
   font-size: 16px;
   font-weight: 500;
 }
+
+.edit-handle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #2563eb;
+  display: grid;
+  place-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  cursor: grab;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.edit-handle:active {
+  cursor: grabbing;
+}

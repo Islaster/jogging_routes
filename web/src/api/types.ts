@@ -15,4 +15,5 @@ export interface RouteView {
 
 export interface PlannerApi {
   plan(req: RouteRequest): Promise<RouteView[]>;
+  reroute(req: RouteRequest, waypoints: LatLng[]): Promise<RouteView>;
 }

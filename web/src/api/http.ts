@@ -1,5 +1,18 @@
-import { decodePolyline } from "@core/geo";
+import { decodePolyline } from "@core/geo/polyline";
 import type { PlannerApi, RouteView } from "./types";
+
+function toRouteView(r: any, i: number): RouteView {
+  return {
+    id: r.id ?? `route-${i}`,
+    path: decodePolyline(r.polyline),
+    miles: r.miles,
+    gainFt: r.gainFt,
+    ftPerMile: r.ftPerMile,
+    sideRoadRatio: r.sideRoadRatio,
+    score: r.score,
+    breakdown: r.breakdown,
+  };
+}
 
 export function createHttpApi(baseUrl = "/api"): PlannerApi {
   return {
@@ -9,25 +22,24 @@ export function createHttpApi(baseUrl = "/api"): PlannerApi {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
       });
-
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
         throw new Error(`Planner failed (${res.status}) ${detail}`.trim());
       }
+      return (await res.json()).map(toRouteView);
+    },
 
-      const routes = await res.json();
-      return routes.map(
-        (r: any, i: number): RouteView => ({
-          id: r.id ?? `route-${i}`,
-          path: decodePolyline(r.polyline),
-          miles: r.miles,
-          gainFt: r.gainFt,
-          ftPerMile: r.ftPerMile,
-          sideRoadRatio: r.sideRoadRatio,
-          score: r.score,
-          breakdown: r.breakdown,
-        })
-      );
+    async reroute(req, waypoints) {
+      const res = await fetch(`${baseUrl}/reroute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...req, waypoints }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Reroute failed (${res.status}) ${detail}`.trim());
+      }
+      return toRouteView(await res.json(), 0);
     },
   };
 }

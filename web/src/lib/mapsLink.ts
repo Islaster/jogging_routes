@@ -1,4 +1,4 @@
-import { simplifyToBudget } from "@core/geo";
+import { simplifyToBudget } from "@core/geo/simplify";
 import type { LatLng } from "../api";
 
 const fmt = (p: LatLng) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;

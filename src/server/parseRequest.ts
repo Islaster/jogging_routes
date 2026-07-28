@@ -1,15 +1,17 @@
-import type { RouteRequest, Terrain, RoadPref } from "../types";
+import type { RouteRequest, RoadPref, Terrain } from "../types";
 
 const TERRAINS: Terrain[] = ["flat", "rolling", "hilly"];
 const ROADS: RoadPref[] = ["side-roads", "any", "trails"];
 
-const snap = (n: number) => Math.round(n * 2000) / 2000;
+/** ~50m grid — keeps precise coordinates out of logs and helps caches hit. */
+const snap = (value: number) => Math.round(value * 2000) / 2000;
 
 export function parseRequest(body: unknown): RouteRequest {
-  const b = body as any;
-  const lat = Number(b?.start?.lat);
-  const lng = Number(b?.start?.lng);
-  const miles = Number(b?.miles);
+  const input = body as any;
+
+  const lat = Number(input?.start?.lat);
+  const lng = Number(input?.start?.lng);
+  const miles = Number(input?.miles);
 
   if (!Number.isFinite(lat) || lat < -90 || lat > 90)
     throw new Error("Invalid start.lat");
@@ -17,15 +19,15 @@ export function parseRequest(body: unknown): RouteRequest {
     throw new Error("Invalid start.lng");
   if (!Number.isFinite(miles) || miles < 0.5 || miles > 30)
     throw new Error("miles must be 0.5–30");
-  if (!TERRAINS.includes(b?.terrain))
+  if (!TERRAINS.includes(input?.terrain))
     throw new Error(`terrain must be one of: ${TERRAINS.join(", ")}`);
-  if (!ROADS.includes(b?.roads))
+  if (!ROADS.includes(input?.roads))
     throw new Error(`roads must be one of: ${ROADS.join(", ")}`);
 
   return {
     start: { lat: snap(lat), lng: snap(lng) },
     miles,
-    terrain: b.terrain,
-    roads: b.roads,
+    terrain: input.terrain,
+    roads: input.roads,
   };
 }

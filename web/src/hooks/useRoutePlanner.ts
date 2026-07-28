@@ -8,6 +8,12 @@ export function useRoutePlanner(initial: RouteRequest) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const replaceRoute = useCallback((next: RouteView) => {
+    setRoutes((rs) => rs.map((r) => (r.id === next.id ? next : r)));
+  }, []);
+
+  // add replaceRoute to the returned object
+
   const plan = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -32,5 +38,6 @@ export function useRoutePlanner(initial: RouteRequest) {
     loading,
     error,
     plan,
+    replaceRoute,
   };
 }
