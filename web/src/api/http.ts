@@ -23,8 +23,7 @@ export function createHttpApi(baseUrl = "/api"): PlannerApi {
         body: JSON.stringify(req),
       });
       if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        throw new Error(`Planner failed (${res.status}) ${detail}`.trim());
+        throw await errorFrom(res, "Couldn't find routes. Please try again.");
       }
       return (await res.json()).map(toRouteView);
     },
@@ -42,4 +41,14 @@ export function createHttpApi(baseUrl = "/api"): PlannerApi {
       return toRouteView(await res.json(), 0);
     },
   };
+}
+
+async function errorFrom(res: Response, fallback: string): Promise<Error> {
+  try {
+    const body = await res.json();
+    if (body?.error) return new Error(body.error);
+  } catch {
+    // not JSON — fall through
+  }
+  return new Error(fallback);
 }

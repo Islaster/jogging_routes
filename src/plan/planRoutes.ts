@@ -62,7 +62,7 @@ export async function planRoutes(
       `  trails: ${Math.round(trails.connectedMeters)}m reachable ` +
         `of ${Math.round(trails.nearbyMeters)}m nearby`
     );
-    if (trails.connectedMeters < targetM * 0.25) {
+    if (trails.connectedMeters < targetM * 0.6) {
       throw new Error(noNetworkNearby(request, trails.nearbyMeters));
     }
   }

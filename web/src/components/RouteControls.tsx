@@ -7,7 +7,14 @@ interface Props {
   loading: boolean;
 }
 
-const TERRAINS = ["flat", "rolling", "hilly"] as const;
+const DISTANCES = [1, 2, 3, 5, 10];
+
+const TERRAINS = [
+  { value: "flat", label: "Flat" },
+  { value: "rolling", label: "Rolling" },
+  { value: "hilly", label: "Hilly" },
+] as const;
+
 const ROADS = [
   { value: "side-roads", label: "Side roads" },
   { value: "trails", label: "Trails" },
@@ -15,48 +22,78 @@ const ROADS = [
 ] as const;
 
 export function RouteControls({ value, onChange, onSubmit, loading }: Props) {
-  const set = <K extends keyof RouteRequest>(k: K, v: RouteRequest[K]) =>
-    onChange({ ...value, [k]: v });
+  const set = <K extends keyof RouteRequest>(key: K, next: RouteRequest[K]) =>
+    onChange({ ...value, [key]: next });
+
+  const nudge = (delta: number) =>
+    set(
+      "miles",
+      Math.min(20, Math.max(0.5, Number((value.miles + delta).toFixed(1))))
+    );
 
   return (
     <div className="controls">
-      <label>
-        Distance: <strong>{value.miles.toFixed(1)} mi</strong>
-        <input
-          type="range"
-          min={1}
-          max={20}
-          step={0.5}
-          value={value.miles}
-          onChange={(e) => set("miles", Number(e.target.value))}
-        />
-      </label>
-
-      <fieldset>
-        <legend>Terrain</legend>
-        {TERRAINS.map((t) => (
+      <div className="control-row">
+        <span className="control-label">Distance</span>
+        <div className="chips">
           <button
-            key={t}
-            className={value.terrain === t ? "chip active" : "chip"}
-            onClick={() => set("terrain", t)}
+            className="chip stepper"
+            onClick={() => nudge(-0.5)}
+            aria-label="Shorter"
           >
-            {t}
+            −
           </button>
-        ))}
-      </fieldset>
-
-      <fieldset>
-        <legend>Roads</legend>
-        {ROADS.map((r) => (
+          {DISTANCES.map((miles) => (
+            <button
+              key={miles}
+              className={value.miles === miles ? "chip active" : "chip"}
+              onClick={() => set("miles", miles)}
+            >
+              {miles}
+            </button>
+          ))}
           <button
-            key={r.value}
-            className={value.roads === r.value ? "chip active" : "chip"}
-            onClick={() => set("roads", r.value)}
+            className="chip stepper"
+            onClick={() => nudge(0.5)}
+            aria-label="Longer"
           >
-            {r.label}
+            +
           </button>
-        ))}
-      </fieldset>
+          <span className="chips-value">{value.miles.toFixed(1)} mi</span>
+        </div>
+      </div>
+
+      <div className="control-row">
+        <span className="control-label">Terrain</span>
+        <div className="chips">
+          {TERRAINS.map((option) => (
+            <button
+              key={option.value}
+              className={
+                value.terrain === option.value ? "chip active" : "chip"
+              }
+              onClick={() => set("terrain", option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="control-row">
+        <span className="control-label">Roads</span>
+        <div className="chips">
+          {ROADS.map((option) => (
+            <button
+              key={option.value}
+              className={value.roads === option.value ? "chip active" : "chip"}
+              onClick={() => set("roads", option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <button className="primary" onClick={onSubmit} disabled={loading}>
         {loading ? "Finding routes…" : "Find routes"}

@@ -1,9 +1,11 @@
 import type { GraphEdge } from "../graph/types";
 import type { RoadPref } from "./types";
 
-/** A genuine trail or path, as opposed to a street. */
+const TRAIL_TYPES = new Set(["path", "track", "bridleway"]);
+
+/** A genuine trail — not a sidewalk or a paved park connector. */
 export function isTrail(edge: GraphEdge): boolean {
-  return edge.quietness >= 0.95;
+  return TRAIL_TYPES.has(edge.type);
 }
 
 /**
