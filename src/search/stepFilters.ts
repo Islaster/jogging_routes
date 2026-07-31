@@ -8,6 +8,12 @@ export type StepFilter = (ctx: StepContext, step: Step) => boolean;
 export const startsOutward: StepFilter = (ctx, step) => {
   if (ctx.traveledM > ctx.targetM * 0.2) return true;
 
+  // With only one or two ways out, forcing a bearing just kills the walk.
+  const options = ctx.graph.nodes[ctx.currentNode].edges.filter(
+    (id) => !ctx.usedEdges.has(id) && isRunnable(ctx.graph.edges[id], ctx.roads)
+  ).length;
+  if (options <= 2) return true;
+
   const start = ctx.graph.nodes[ctx.startNode];
   const destination = ctx.graph.nodes[step.toNode];
   const bearing = bearingBetween(
@@ -26,9 +32,9 @@ export const notReused: StepFilter = (ctx, step) =>
 export const isAllowedRoad: StepFilter = (ctx, step) =>
   isRunnable(ctx.graph.edges[step.edgeId], ctx.roads);
 
-/** Don't exceed the distance ceiling. */
+/** Leave enough budget to get home, not just to take this step. */
 export const withinBudget: StepFilter = (ctx, step) =>
-  ctx.traveledM + step.meters <= ctx.maxTotalM;
+  ctx.traveledM + step.meters + ctx.homeDistances[step.toNode] <= ctx.maxTotalM;
 
 /** The far end must be somewhere we could still get home from. */
 export const canReachHome: StepFilter = (ctx, step) =>

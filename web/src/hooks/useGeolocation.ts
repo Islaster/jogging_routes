@@ -10,7 +10,7 @@ export type GeoState =
 const OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
   timeout: 15_000,
-  maximumAge: 30_000,
+  maximumAge: 0, // always take a fresh reading
 };
 
 function describe(err: GeolocationPositionError): string {

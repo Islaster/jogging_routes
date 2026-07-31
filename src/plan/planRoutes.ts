@@ -3,18 +3,22 @@ import { findStartNode } from "../search/startNode";
 import { searchLoops } from "../search/searchLoops";
 import { dedupeLoops } from "./dedupeLoops";
 import { diversify } from "./diversify";
+import { filterByTerrain } from "./filterByTerrain";
 import { enrichLoop } from "./enrichLoop";
-import type { RouteRequest, ScoredRoute } from "../types";
-import type { PlannerDeps } from "./deps";
 import { sectorOf } from "./sectorOf";
-import { measureNetwork, totalRunnableMeters } from "../search/measureNetwork";
+import {
+  measureNetwork,
+  measureTrails,
+  totalRunnableMeters,
+} from "../search/measureNetwork";
 import {
   noNetworkNearby,
   networkTooSmall,
   noLoopFound,
 } from "./explainFailure";
-import { measureTrails } from "../search/measureNetwork";
-import { distancesFrom } from "../search/reachability";
+import type { RoadGraph } from "../graph/RoadGraph";
+import type { RouteRequest, ScoredRoute } from "../types";
+import type { PlannerDeps } from "./deps";
 
 const MILES_TO_M = 1609.344;
 const MIN_FETCH_RADIUS_M = 800;
@@ -36,21 +40,7 @@ export async function planRoutes(
 
   const elevation = await deps.elevationGrid(request.start, radiusM);
   const graph = await loadGraph(request.start, radiusM, elevation);
-  const trailEdges = graph.edges.filter((e) => e.quietness >= 0.95);
-  const trailNodes = new Set(trailEdges.flatMap((e) => [e.from, e.to]));
-  const degrees = new Map<number, number>();
-  for (const node of trailNodes) {
-    const d = graph.nodes[node].edges.filter(
-      (id) => graph.edges[id].quietness >= 0.95
-    ).length;
-    degrees.set(d, (degrees.get(d) ?? 0) + 1);
-  }
-  console.log(
-    `  trail nodes by degree: ${[...degrees]
-      .sort((a, b) => a[0] - b[0])
-      .map(([d, n]) => `${d}:${n}`)
-      .join(" ")}`
-  );
+  logGrades(graph);
 
   const startNode = findStartNode(graph, request.start, request.roads);
   if (startNode === null) {
@@ -60,17 +50,11 @@ export async function planRoutes(
   }
 
   const node = graph.nodes[startNode];
-  const distances = distancesFrom(graph, startNode, request.roads);
-  let reachable = 0;
-  for (const d of distances) if (d !== Infinity) reachable++;
-
   console.log(
     `  start node ${startNode} at ${node.lat.toFixed(5)},${node.lng.toFixed(
       5
-    )} — ` +
-      `${node.edges.length} edges, reaches ${reachable}/${graph.nodes.length} nodes`
+    )} — ` + `${node.edges.length} edges`
   );
-  const extent = measureNetwork(graph, startNode, request.roads);
 
   if (request.roads === "trails") {
     const trails = measureTrails(graph, startNode);
@@ -83,16 +67,11 @@ export async function planRoutes(
     }
   }
 
-  if (extent.connectedMeters < targetM * 1.2) {
-    throw new Error(networkTooSmall(request, extent));
-  }
+  const extent = measureNetwork(graph, startNode, request.roads);
   console.log(
     `  ${request.roads}: ${Math.round(extent.connectedMeters)}m connected ` +
-      `of ${Math.round(extent.nearbyMeters)}m nearby, reaching ${Math.round(
-        extent.farthestM
-      )}m out`
+      `of ${Math.round(extent.nearbyMeters)}m nearby`
   );
-
   if (extent.connectedMeters < targetM * 1.2) {
     throw new Error(networkTooSmall(request, extent));
   }
@@ -103,36 +82,80 @@ export async function planRoutes(
     targetM,
     request.roads,
     request.terrain,
-    {
-      attempts,
-      tolerance,
-    }
+    { attempts, tolerance }
   );
   if (!found.length) {
     throw new Error(noLoopFound(request));
   }
 
   const distinct = dedupeLoops(found);
-  const enriched = distinct.map((loop) => enrichLoop(loop, request, elevation));
-  const picked = diversify(
-    distinct,
-    request.start,
-    count,
-    (loop) => enriched[distinct.indexOf(loop)].score
+  const scored = new Map(
+    distinct.map((loop) => [loop, enrichLoop(loop, request, elevation)])
   );
 
-  picked.forEach((loop, i) => {
-    const sector = sectorOf(loop, request.start, 8);
-    const enrichedLoop = enriched[distinct.indexOf(loop)];
+  const gains = [...scored.values()]
+    .map((r) => r.ftPerMile)
+    .sort((a, b) => a - b);
+  const pick = (p: number) =>
+    Math.round(gains[Math.floor((gains.length - 1) * p)]);
+  console.log(
+    `  ft/mi across ${gains.length} loops: ` +
+      `min ${pick(0)} p25 ${pick(0.25)} median ${pick(0.5)} p75 ${pick(
+        0.75
+      )} max ${pick(1)}`
+  );
+
+  const terrainMatched = [...scored.values()].some(
+    (route) => route.breakdown.terrain >= 0.5
+  );
+  if (!terrainMatched) {
     console.log(
-      `  route ${i}: ${sector * 45}° — ${enrichedLoop.miles.toFixed(2)}mi, ` +
-        `${Math.round(enrichedLoop.gainFt)}ft, quiet ${(
-          loop.quietness * 100
-        ).toFixed(0)}%`
+      `  no ${request.terrain} routes here — these average ${pick(0.5)} ft/mi`
     );
-  });
+  }
+
+  const terrainPool = filterByTerrain(distinct, scored, count);
+  console.log(
+    `  terrain pool: ${terrainPool.length} of ${distinct.length} loops`
+  );
+
+  const picked = diversify(
+    terrainPool,
+    request.start,
+    count,
+    (loop) => scored.get(loop)!.score
+  );
+
+  logPicked(picked, request, scored);
 
   return picked
-    .map((loop) => enriched[distinct.indexOf(loop)])
+    .map((loop) => scored.get(loop)!)
     .sort((a, b) => b.score - a.score);
+}
+
+/** Are grades varied enough for the terrain preference to act on? */
+function logGrades(graph: RoadGraph): void {
+  const grades = graph.edges.map((e) => e.grade).sort((a, b) => a - b);
+  if (!grades.length) return;
+
+  const at = (p: number) => grades[Math.floor((grades.length - 1) * p)];
+  console.log(
+    `  grades: median ${at(0.5).toFixed(4)} ` +
+      `p90 ${at(0.9).toFixed(4)} p99 ${at(0.99).toFixed(4)}`
+  );
+}
+
+function logPicked(
+  picked: import("../search/types").Loop[],
+  request: RouteRequest,
+  scored: Map<import("../search/types").Loop, ScoredRoute>
+): void {
+  picked.forEach((loop, i) => {
+    const route = scored.get(loop)!;
+    console.log(
+      `  route ${i}: ${sectorOf(loop, request.start, 8) * 45}° — ` +
+        `${route.miles.toFixed(2)}mi, ${Math.round(route.gainFt)}ft, ` +
+        `quiet ${(loop.quietness * 100).toFixed(0)}%`
+    );
+  });
 }

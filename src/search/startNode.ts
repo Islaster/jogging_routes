@@ -5,9 +5,11 @@ import type { LatLng } from "../types";
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { RoadPref } from "./types";
 
+const MIN_JUNCTION_DEGREE = 3;
+
 /**
- * Nearest node you can actually run from — one connected to the bulk of the
- * network, not a driveway stub that happens to be closest.
+ * Nearest node you can actually run from — a junction connected to the bulk
+ * of the network, not a driveway stub that happens to be closest.
  */
 export function findStartNode(
   graph: RoadGraph,
@@ -20,11 +22,18 @@ export function findStartNode(
 
   const minimumReach = Math.max(20, graph.nodes.length * 0.1);
 
+  const junctions = candidates.filter(
+    (id) => runnableDegree(graph, id, roads) >= MIN_JUNCTION_DEGREE
+  );
+
+  for (const id of junctions) {
+    if (reachCount(graph, id, roads) >= minimumReach) return id;
+  }
   for (const id of candidates) {
     if (reachCount(graph, id, roads) >= minimumReach) return id;
   }
 
-  return candidates[0]; // nothing well-connected nearby; take the closest
+  return candidates[0];
 }
 
 /** Runnable nodes within range, nearest first. */
@@ -44,6 +53,17 @@ function nearbyRunnableNodes(
   }
 
   return found.sort((a, b) => a.distance - b.distance).map((n) => n.id);
+}
+
+/** How many ways out of this node are runnable. */
+function runnableDegree(
+  graph: RoadGraph,
+  nodeId: number,
+  roads: RoadPref
+): number {
+  return graph.nodes[nodeId].edges.filter((id) =>
+    isRunnable(graph.edges[id], roads)
+  ).length;
 }
 
 function reachCount(graph: RoadGraph, from: number, roads: RoadPref): number {
