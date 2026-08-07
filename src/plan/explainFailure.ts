@@ -47,8 +47,11 @@ export function networkTooSmall(
 
 /** Enough network, but no closed loop of the right length exists. */
 export function noLoopFound(request: RouteRequest): string {
-  return (
-    `Found ${KIND[request.roads]} nearby, but no ${request.miles} mile loop ` +
-    `that returns here without doubling back. Try a nearby distance.`
-  );
+  const lights = request.avoidStoplights ? " that avoids stoplights" : "";
+  const hint = request.avoidStoplights
+    ? "Try allowing stoplights, or a shorter distance."
+    : "Try a nearby distance.";
+  return `Found ${KIND[request.roads]} nearby, but no ${
+    request.miles
+  } mile loop${lights} that returns here without doubling back. ${hint}`;
 }

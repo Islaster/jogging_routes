@@ -2,6 +2,7 @@ import { candidateSteps } from "./candidateSteps";
 import { partitionSteps, OUT_AND_BACK_FILTERS } from "./stepFilters";
 import { weightOf } from "./stepWeights";
 import { pickStep } from "./pickStep";
+import { blockDirection } from "./blockEdge";
 import type { LatLng } from "../types";
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { Loop, RoadPref, Step, StepContext, Terrain } from "./types";
@@ -18,6 +19,7 @@ export interface OutAndBackOptions {
   roads: RoadPref;
   terrain: Terrain;
   outboundBearingDeg: number;
+  avoidStoplights: boolean;
 }
 
 /**
@@ -66,7 +68,7 @@ function initialState(
     startNode,
     currentNode: startNode,
     previousEdge: undefined,
-    usedEdges: new Set<number>(),
+    usedDirections: new Set<number>(),
     edgeIds: [],
     traveledM: 0,
     maxTotalM: maxOutboundM,
@@ -80,6 +82,8 @@ function initialState(
     terrain,
     targetM,
     outboundBearingDeg: options.outboundBearingDeg,
+    avoidStoplights: options.avoidStoplights,
+    lastVisitAtM: new Map([[startNode, 0]]),
   };
 }
 
@@ -111,11 +115,13 @@ function chooseNextStep(
 }
 
 function advance(state: WalkState, step: Step, graph: RoadGraph): void {
-  state.usedEdges.add(step.edgeId);
+  blockDirection(graph, step.edgeId, state.currentNode, state.usedDirections);
+
   state.edgeIds.push(step.edgeId);
   state.previousEdge = step.edgeId;
   state.traveledM += step.meters;
   state.currentNode = step.toNode;
+  state.lastVisitAtM.set(state.currentNode, state.traveledM);
 }
 
 /** Outbound path plus its reverse — there and back. */
@@ -150,5 +156,6 @@ function mirror(
     meters: outboundM * 2,
     quietness: quietnessSum / outboundM,
     edgeIds: [...edgeIds, ...[...edgeIds].reverse()],
+    shape: "out-and-back",
   };
 }

@@ -23,6 +23,7 @@ export function splitAtJunctions(
         lanes: way.lanes,
         quietness: way.quietness,
         crossable: way.crossable,
+        sidewalkSides: way.sidewalkSides,
       });
       sliceStart = i;
     }

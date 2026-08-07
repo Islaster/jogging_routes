@@ -89,6 +89,21 @@ body,
   cursor: pointer;
 }
 
+.chip.lights {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lights-desktop {
+  display: none;
+}
+
+.lights-mobile {
+  display: inline-flex;
+  align-items: center;
+}
+
 .chip.active {
   background: #2563eb;
   border-color: #2563eb;
@@ -293,6 +308,21 @@ body,
 
   .route-stats {
     font-size: 12px;
+  }
+
+  .chip.lights {
+    width: 100%;
+  }
+
+  .lights-desktop {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .lights-mobile {
+    display: none;
   }
 }
 

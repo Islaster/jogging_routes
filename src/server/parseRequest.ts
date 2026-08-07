@@ -29,5 +29,6 @@ export function parseRequest(body: unknown): RouteRequest {
     miles,
     terrain: input.terrain,
     roads: input.roads,
+    avoidStoplights: input?.avoidStoplights === true,
   };
 }

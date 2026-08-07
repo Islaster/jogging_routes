@@ -4,13 +4,15 @@ import { candidateSteps } from "./candidateSteps";
 import { partitionSteps } from "./stepFilters";
 import { weightOf } from "./stepWeights";
 import { pickStep } from "./pickStep";
-import { blockEdge } from "./blockEdge";
+import { blockDirection } from "./blockEdge";
 import { tryClose } from "./tryClose";
 import { recordStep, type WalkTrace } from "./trace";
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { Loop, RoadPref, Step, StepContext, Terrain } from "./types";
 
 const MAX_STEPS = 500;
+/** A loop may run this much past the tolerance window if that's what closes it. */
+const EXTRA_LOOP_M = 161; // 0.1 mile
 
 export interface WalkOptions {
   graph: RoadGraph;
@@ -23,6 +25,7 @@ export interface WalkOptions {
   terrain: Terrain;
   /** Compass direction this walk should head out toward. */
   outboundBearingDeg: number;
+  avoidStoplights: boolean;
   trace?: WalkTrace;
 }
 
@@ -41,7 +44,7 @@ export function walkOnce(options: WalkOptions): Loop | null {
 
   const homeCost = makeHomeCost(random);
   const minTotalM = targetM * (1 - tolerance);
-  const maxTotalM = targetM * (1 + tolerance);
+  const maxTotalM = targetM * (1 + tolerance) + EXTRA_LOOP_M;
   const state = initialState(options, maxTotalM);
 
   for (let step = 0; step < MAX_STEPS; step++) {
@@ -51,31 +54,35 @@ export function walkOnce(options: WalkOptions): Loop | null {
         startNode,
         state.currentNode,
         state.edgeIds,
-        state.usedEdges,
+        state.usedDirections,
         state.traveledM,
         minTotalM,
         maxTotalM,
         roads,
-        homeCost
+        homeCost,
+        options.avoidStoplights
       );
       if (result.status === "closed") {
-        if (trace)
+        if (trace) {
           trace.outcome = `closed at ${Math.round(state.traveledM)}m walked`;
+        }
         return result.loop;
       }
       if (result.status === "overshot") {
-        if (trace)
+        if (trace) {
           trace.outcome = `overshot at ${Math.round(state.traveledM)}m`;
+        }
         return null;
       }
     }
 
     const chosen = chooseNextStep(state, random, trace);
     if (!chosen) {
-      if (trace)
+      if (trace) {
         trace.outcome = `stuck at ${Math.round(
           state.traveledM
         )}m, no legal steps`;
+      }
       return null;
     }
 
@@ -97,7 +104,7 @@ function initialState(options: WalkOptions, maxTotalM: number): WalkState {
     startNode,
     currentNode: startNode,
     previousEdge: undefined,
-    usedEdges: new Set<number>(),
+    usedDirections: new Set<number>(),
     edgeIds: [],
     traveledM: 0,
     maxTotalM,
@@ -111,6 +118,8 @@ function initialState(options: WalkOptions, maxTotalM: number): WalkState {
     terrain,
     targetM,
     outboundBearingDeg: options.outboundBearingDeg,
+    avoidStoplights: options.avoidStoplights,
+    lastVisitAtM: new Map([[startNode, 0]]),
   };
 }
 
@@ -140,7 +149,19 @@ function chooseNextStep(
     state.previousEdge
   );
   const { legal, rejections } = partitionSteps(state, all);
-  if (!legal.length) return null;
+  if (!legal.length) {
+    if (trace) {
+      const tally =
+        Object.entries(rejections)
+          .filter(([, n]) => n > 0)
+          .map(([k, n]) => `${k}×${n}`)
+          .join(" ") || "no candidates at all";
+      console.log(
+        `    dead end: ${tally} (node ${state.currentNode}, ${all.length} edges)`
+      );
+    }
+    return null;
+  }
 
   const weights = legal.map(
     (step) => weightOf(state, step) * (0.3 + random() * 1.7)
@@ -152,7 +173,7 @@ function chooseNextStep(
 }
 
 function advance(state: WalkState, step: Step, graph: RoadGraph): void {
-  blockEdge(graph, step.edgeId, state.usedEdges);
+  blockDirection(graph, step.edgeId, state.currentNode, state.usedDirections);
 
   state.edgeIds.push(step.edgeId);
   state.previousEdge = step.edgeId;
@@ -161,6 +182,7 @@ function advance(state: WalkState, step: Step, graph: RoadGraph): void {
     ? state.legLengthM + step.meters
     : step.meters;
   state.currentNode = step.toNode;
+  state.lastVisitAtM.set(state.currentNode, state.traveledM);
 
   updateSweep(state, graph);
 }

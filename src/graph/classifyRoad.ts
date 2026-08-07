@@ -17,6 +17,34 @@ export const ROAD_QUIETNESS: Record<string, number> = {
 /** Classes that are arterials however their lanes happen to be tagged. */
 const MAJOR_CLASSES = new Set(["trunk", "primary", "secondary"]);
 
+const NO_SIDEWALK = new Set(["no", "none"]);
+
+const hasWalk = (v: string | undefined): boolean =>
+  v !== undefined && !NO_SIDEWALK.has(v);
+
+/** How many sidewalks this street certainly has, per OSM tags.
+ *  Values are read, not key presence — `sidewalk:right=no` is a denial.
+ *  Untagged returns 0: no certainty, no second pass. */
+export function sidewalkSides(tags: Record<string, string>): 0 | 1 | 2 {
+  const s = tags.sidewalk;
+  if (s === "both") return 2;
+  if (s === "separate") return 2; // tag semantics: both sides, mapped as own ways
+  if (s === "left" || s === "right") return 1;
+  if (s !== undefined && NO_SIDEWALK.has(s)) return 0;
+
+  const both = tags["sidewalk:both"];
+  if (both !== undefined) return hasWalk(both) ? 2 : 0;
+
+  const left = hasWalk(tags["sidewalk:left"]);
+  const right = hasWalk(tags["sidewalk:right"]);
+  if (left && right) return 2;
+  if (left || right) return 1;
+
+  if (s === "yes") return 1; // sidewalks exist, sides unstated — certain of one
+
+  return 0;
+}
+
 /** Is this a way a person would actually run along? */
 export function isJoggable(tags: Record<string, string>): boolean {
   const type = tags?.highway;

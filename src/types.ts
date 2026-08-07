@@ -11,6 +11,7 @@ export interface RouteRequest {
   miles: number;
   terrain: Terrain;
   roads: RoadPref;
+  avoidStoplights: boolean;
 }
 
 export interface RawRoute {

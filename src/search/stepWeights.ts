@@ -32,10 +32,10 @@ export const followsLeg: StepWeight = (ctx, step) => {
   return step.isStraight === !wantsTurn ? 4 : 1;
 };
 
-/** Mild pull toward quieter streets among those already allowed. */
+/** Among allowed streets, quietness only matters as a trail-connector tiebreak. */
 export const prefersQuiet: StepWeight = (ctx, step) => {
-  const edge = ctx.graph.edges[step.edgeId];
-  return ctx.roads === "side-roads" ? 1 : 0.05 + edge.quietness;
+  if (ctx.roads !== "trails") return 1;
+  return 0.05 + ctx.graph.edges[step.edgeId].quietness;
 };
 
 /** In trails mode, take a path over a street wherever one exists. */
@@ -43,6 +43,13 @@ export const prefersTrails: StepWeight = (ctx, step) => {
   if (ctx.roads !== "trails") return 1;
   return isTrail(ctx.graph.edges[step.edgeId]) ? 12 : 1;
 };
+
+/**
+ * Reversing onto the street just left is legal (the other sidewalk),
+ * but only attractive when nothing else is open.
+ */
+export const prefersProgress: StepWeight = (ctx, step) =>
+  step.edgeId === ctx.previousEdge ? 0.15 : 1;
 
 /** Seek or avoid gradient. */
 export const matchesTerrain: StepWeight = (ctx, step) => {
@@ -57,6 +64,7 @@ export const ALL_WEIGHTS: StepWeight[] = [
   followsLeg,
   prefersQuiet,
   prefersTrails,
+  prefersProgress,
   matchesTerrain,
 ];
 

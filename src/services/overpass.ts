@@ -1,13 +1,13 @@
 import type { LatLng } from "../types";
 
+const REQUEST_TIMEOUT_MS = 12_000;
+
 const INSTANCES = [
   process.env.OVERPASS_URL,
+  "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://overpass-api.de/api/interpreter",
-].filter(
-  (url, i, all): url is string => Boolean(url) && all.indexOf(url) === i
-);
+].filter((u, i, a): u is string => Boolean(u) && a.indexOf(u) === i);
 
 const USER_AGENT =
   "jogging-routes/0.1 (https://github.com/Islaster/jogging_routes)";
@@ -93,22 +93,42 @@ async function runQuery(query: string, fetchImpl: typeof fetch): Promise<any> {
   let lastError: Error = new Error("No Overpass instances configured");
 
   for (const url of INSTANCES) {
+    const host = new URL(url).host;
     for (let attempt = 0; attempt < 2; attempt++) {
+      const started = Date.now();
       try {
         const response = await postQuery(url, query, fetchImpl);
-        if (response.ok && isJson(response)) return await response.json();
-
+        if (response.ok && isJson(response)) {
+          console.log(`    overpass ${host}: ok in ${Date.now() - started}ms`);
+          return await response.json();
+        }
         lastError = await describeFailure(url, response);
+        console.log(
+          `    overpass ${host}: HTTP ${response.status} in ${
+            Date.now() - started
+          }ms`
+        );
         if (!RETRY_STATUSES.has(response.status)) break;
         await pause(1500 * (attempt + 1));
       } catch (error) {
+        const aborted = error instanceof Error && error.name === "AbortError";
+        console.log(
+          `    overpass ${host}: ${aborted ? "timed out" : "failed"} after ${
+            Date.now() - started
+          }ms`
+        );
         lastError = error instanceof Error ? error : new Error(String(error));
-        break;
+        break; // a hung mirror won't recover in 1.5s — move on
       }
     }
   }
 
-  throw lastError;
+  throw new Error(
+    "Road map servers are busy right now — try again in a minute. " +
+      `(${
+        lastError.message.includes("abort") ? "timed out" : lastError.message
+      })`
+  );
 }
 
 function postQuery(
@@ -116,6 +136,9 @@ function postQuery(
   query: string,
   fetchImpl: typeof fetch
 ): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   return fetchImpl(url, {
     method: "POST",
     headers: {
@@ -124,7 +147,8 @@ function postQuery(
       Accept: "application/json",
     },
     body: "data=" + encodeURIComponent(query),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timer));
 }
 
 function isJson(response: Response): boolean {

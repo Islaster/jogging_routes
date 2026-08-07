@@ -15,9 +15,12 @@ export function findStartNode(
   graph: RoadGraph,
   point: LatLng,
   roads: RoadPref,
-  maxMeters = 500
+  maxMeters = 500,
+  acceptable: (nodeId: number) => boolean = () => true
 ): number | null {
-  const candidates = nearbyRunnableNodes(graph, point, roads, maxMeters);
+  const all = nearbyRunnableNodes(graph, point, roads, maxMeters);
+  const candidates = all.filter(acceptable);
+  if (!candidates.length) return all[0] ?? null; // everything nearby is a light — degrade honestly
   if (!candidates.length) return null;
 
   const minimumReach = Math.max(20, graph.nodes.length * 0.1);

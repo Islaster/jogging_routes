@@ -27,11 +27,19 @@ export default function App() {
     miles: 5,
     terrain: "rolling",
     roads: "side-roads",
+    avoidStoplights: false,
   });
 
   useEffect(() => {
     if (geoState.status === "ready") {
       setRequest((prev) => ({ ...prev, start: geoState.position }));
+
+      // Pre-warm the road cache for this area while the person picks filters.
+      fetch("/api/warm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geoState.position),
+      }).catch(() => {});
     }
   }, [geoState, setRequest]);
 

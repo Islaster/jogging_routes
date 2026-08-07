@@ -1,21 +1,32 @@
 import { MinHeap } from "./MinHeap";
 import { isRunnable } from "./runnable";
+import { directionKey } from "./direction";
+import { bearingBetween, bearingDelta } from "../geo/bearing";
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { RoadPref } from "./types";
+
+const STRAIGHT_DEG = 30;
 
 export interface HomePath {
   edgeIds: number[];
   meters: number;
 }
 
-/** Shortest route back to `destination` using only unused runnable edges. */
+/**
+ * Shortest route back to `destination` over runnable edges whose direction
+ * hasn't been spent — coming home on the other sidewalk is legal where the
+ * data certifies it. Obeys the same transition rules as the outbound walk:
+ * no straight-through at unsignalized arterial nodes, and none at
+ * stoplights when avoiding them.
+ */
 export function pathHome(
   graph: RoadGraph,
   origin: number,
   destination: number,
-  forbidden: Set<number>,
+  forbiddenDirections: Set<number>,
   roads: RoadPref,
-  edgeCost: (edgeId: number) => number = () => 1
+  edgeCost: (edgeId: number) => number = () => 1,
+  avoidStoplights = false
 ): HomePath | null {
   const count = graph.nodes.length;
   const distance = new Float64Array(count).fill(Infinity);
@@ -31,12 +42,30 @@ export function pathHome(
     if (dist > distance[node]) continue;
     if (node === destination) break;
 
+    const here = graph.nodes[node];
+    const previousEdge = cameFromEdge[node];
+
     for (const edgeId of graph.nodes[node].edges) {
-      if (forbidden.has(edgeId)) continue;
+      if (forbiddenDirections.has(directionKey(graph, edgeId, node))) continue;
       const edge = graph.edges[edgeId];
       if (!isRunnable(edge, roads)) continue;
 
       const next = graph.other(edgeId, node);
+
+      if (
+        previousEdge >= 0 &&
+        blocksStraightThrough(
+          graph,
+          here,
+          previousEdge,
+          edge,
+          next,
+          avoidStoplights
+        )
+      ) {
+        continue;
+      }
+
       const candidate = dist + edge.meters * edgeCost(edgeId);
       if (candidate < distance[next]) {
         distance[next] = candidate;
@@ -49,6 +78,32 @@ export function pathHome(
 
   if (distance[destination] === Infinity) return null;
   return retrace(graph, cameFromEdge, cameFromNode, origin, destination);
+}
+
+/** Would continuing onto this edge mean going straight through a node we mustn't? */
+function blocksStraightThrough(
+  graph: RoadGraph,
+  here: RoadGraph["nodes"][number],
+  previousEdge: number,
+  edge: RoadGraph["edges"][number],
+  next: number,
+  avoidStoplights: boolean
+): boolean {
+  const crossingArterial =
+    here.arterial &&
+    !here.signalized &&
+    graph.edges[previousEdge].crossable &&
+    edge.crossable;
+  const waitingAtLight = avoidStoplights && here.stoplight;
+
+  if (!crossingArterial && !waitingAtLight) return false;
+
+  const from = graph.nodes[graph.other(previousEdge, here.id)];
+  const toward = graph.nodes[next];
+  const delta = Math.abs(
+    bearingDelta(bearingBetween(from, here), bearingBetween(here, toward))
+  );
+  return delta < STRAIGHT_DEG;
 }
 
 function retrace(

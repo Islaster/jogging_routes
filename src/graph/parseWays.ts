@@ -3,6 +3,7 @@ import {
   laneCount,
   quietnessOf,
   isCrossable,
+  sidewalkSides,
 } from "./classifyRoad";
 import { coordKey } from "./coordKey";
 import type { ParsedWay } from "./types";
@@ -25,6 +26,7 @@ export function parseWays(elements: any[]): ParsedWay[] {
       lanes,
       quietness: quietnessOf(tags),
       crossable: isCrossable(type, lanes),
+      sidewalkSides: sidewalkSides(tags),
       geometry: geometry.map((g: any) => ({ lat: g.lat, lng: g.lon })),
     });
   }
@@ -38,6 +40,20 @@ export function parseSignalNodes(elements: any[]): Set<string> {
   for (const element of elements) {
     if (element.type !== "node" || !element.tags?.highway) continue;
     keys.add(coordKey(element.lat, element.lon));
+  }
+  return keys;
+}
+
+/** Nodes that are real traffic lights — where a runner has to stop and wait. */
+export function parseStoplightNodes(elements: any[]): Set<string> {
+  const keys = new Set<string>();
+  for (const element of elements) {
+    if (element.type !== "node") continue;
+    const tags = element.tags ?? {};
+    const isLight =
+      tags.highway === "traffic_signals" ||
+      (tags.highway === "crossing" && tags.crossing === "traffic_signals");
+    if (isLight) keys.add(coordKey(element.lat, element.lon));
   }
   return keys;
 }

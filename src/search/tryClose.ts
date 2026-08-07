@@ -9,22 +9,31 @@ export type CloseResult =
   | { status: "keep-walking" };
 
 /**
- * Can the walk finish here? Checks the REAL legal route home — used edges are
- * blocked, so it can be much longer than the shortest path.
+ * Can the walk finish here? Checks the REAL legal path home — spent
+ * directions are blocked, so it can be much longer than the shortest path.
  */
 export function tryClose(
   graph: RoadGraph,
   startNode: number,
   currentNode: number,
   edgeIds: number[],
-  used: Set<number>,
+  usedDirections: Set<number>,
   traveledM: number,
   minTotalM: number,
   maxTotalM: number,
   roads: RoadPref,
-  edgeCost?: (edgeId: number) => number
+  edgeCost?: (edgeId: number) => number,
+  avoidStoplights = false
 ): CloseResult {
-  const home = pathHome(graph, currentNode, startNode, used, roads, edgeCost);
+  const home = pathHome(
+    graph,
+    currentNode,
+    startNode,
+    usedDirections,
+    roads,
+    edgeCost,
+    avoidStoplights
+  );
   if (!home) return { status: "keep-walking" };
 
   const total = traveledM + home.meters;

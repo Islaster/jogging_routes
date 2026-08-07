@@ -28,6 +28,7 @@ export class RoadGraph {
       edges: [],
       signalized: false,
       arterial: false,
+      stoplight: false,
     });
     this.nodeIds.set(key, id);
 
@@ -53,6 +54,7 @@ export class RoadGraph {
       lanes: spec.lanes,
       quietness: spec.quietness,
       crossable: spec.crossable,
+      sidewalkSides: spec.sidewalkSides,
       grade: 0,
     });
     this.nodes[from].edges.push(id);

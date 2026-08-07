@@ -1,32 +1,29 @@
-import { haversine } from "../geo/distance";
 import { bearingBetween, bearingDelta } from "../geo/bearing";
+import { directionKey } from "./direction";
 import { isRunnable } from "./runnable";
 import type { Step, StepContext } from "./types";
 
 export type StepFilter = (ctx: StepContext, step: Step) => boolean;
 
-export const startsOutward: StepFilter = (ctx, step) => {
-  if (ctx.traveledM > ctx.targetM * 0.2) return true;
+/** Junction slivers form tiny cycles around traffic islands. Passing through
+ *  is fine; lapping is not — a real block loop here is 500m+. */
+const MIN_REVISIT_GAP_M = 200;
 
-  // With only one or two ways out, forcing a bearing just kills the walk.
-  const options = ctx.graph.nodes[ctx.currentNode].edges.filter(
-    (id) => !ctx.usedEdges.has(id) && isRunnable(ctx.graph.edges[id], ctx.roads)
-  ).length;
-  if (options <= 2) return true;
-
-  const start = ctx.graph.nodes[ctx.startNode];
-  const destination = ctx.graph.nodes[step.toNode];
-  const bearing = bearingBetween(
-    { lat: start.lat, lng: start.lng },
-    { lat: destination.lat, lng: destination.lng }
-  );
-
-  return Math.abs(bearingDelta(ctx.outboundBearingDeg, bearing)) <= 75;
+export const noTinyLoops: StepFilter = (ctx, step) => {
+  const lastVisit = ctx.lastVisitAtM.get(step.toNode);
+  if (lastVisit === undefined) return true;
+  return ctx.traveledM + step.meters - lastVisit >= MIN_REVISIT_GAP_M;
 };
 
-/** Never run the same stretch twice — nor its parallel sidewalk. */
+/**
+ * One sidewalk once: an edge may be traversed once per direction when the
+ * data certifies two sidewalks. `blockDirection` spends both keys at once
+ * for uncertain streets, so this stays a pure lookup.
+ */
 export const notReused: StepFilter = (ctx, step) =>
-  !ctx.usedEdges.has(step.edgeId);
+  !ctx.usedDirections.has(
+    directionKey(ctx.graph, step.edgeId, ctx.currentNode)
+  );
 
 /** Only streets matching the road preference. */
 export const isAllowedRoad: StepFilter = (ctx, step) =>
@@ -40,20 +37,22 @@ export const withinBudget: StepFilter = (ctx, step) =>
 export const canReachHome: StepFilter = (ctx, step) =>
   ctx.homeDistances[step.toNode] !== Infinity;
 
-/** Don't walk into a dead end — the way back would be blocked. */
+/**
+ * Don't step somewhere with no way onward. Reversing out on the street's
+ * other sidewalk counts as a way onward when the data certifies it exists.
+ */
 export const hasOnwardMove: StepFilter = (ctx, step) => {
   if (step.toNode === ctx.startNode) return true;
   return ctx.graph.nodes[step.toNode].edges.some(
     (id) =>
-      id !== step.edgeId &&
-      !ctx.usedEdges.has(id) &&
-      isRunnable(ctx.graph.edges[id], ctx.roads)
+      isRunnable(ctx.graph.edges[id], ctx.roads) &&
+      !ctx.usedDirections.has(directionKey(ctx.graph, id, step.toNode))
   );
 };
 
 /**
- * Crossing a big street means going straight through where it meets ours.
- * Only allowed where OSM marks a signal or crosswalk. Turning is always fine.
+ * Crossing a big street means going straight through where it meets ours,
+ * away from any signal. Turning the corner is always fine.
  */
 export const legalCrossing: StepFilter = (ctx, step) => {
   const node = ctx.graph.nodes[ctx.currentNode];
@@ -63,24 +62,40 @@ export const legalCrossing: StepFilter = (ctx, step) => {
   return !ctx.graph.edges[ctx.previousEdge].crossable;
 };
 
-/** Keep circling the start rather than running out and back along one street. */
-export const maintainsSweep: StepFilter = (ctx, step) => {
-  if (ctx.traveledM <= ctx.targetM * 0.3) return true;
-  if (Math.abs(ctx.sweepDeg) >= 150) return true;
-  if (ctx.lastBearingDeg === null) return true;
+/**
+ * A light blocks crossing, not presence. Going straight through means
+ * crossing the street it governs — that's the wait. Turning the corner
+ * never enters the roadway.
+ */
+export const avoidsStoplights: StepFilter = (ctx, step) => {
+  if (!ctx.avoidStoplights) return true;
+  if (!ctx.graph.nodes[ctx.currentNode].stoplight) return true;
+  return !step.isStraight;
+};
+
+/**
+ * The opening steps must actually head the assigned way — as a weight this
+ * loses to randomness and every walk drifts into the same corridor. Skipped
+ * when the node offers too few choices for a direction to be meaningful.
+ */
+export const startsOutward: StepFilter = (ctx, step) => {
+  if (ctx.traveledM > ctx.targetM * 0.2) return true;
+
+  const options = ctx.graph.nodes[ctx.currentNode].edges.filter(
+    (id) =>
+      isRunnable(ctx.graph.edges[id], ctx.roads) &&
+      !ctx.usedDirections.has(directionKey(ctx.graph, id, ctx.currentNode))
+  ).length;
+  if (options <= 2) return true;
 
   const start = ctx.graph.nodes[ctx.startNode];
-  const to = ctx.graph.nodes[step.toNode];
-  const startPoint = { lat: start.lat, lng: start.lng };
-  const toPoint = { lat: to.lat, lng: to.lng };
-
-  if (haversine(startPoint, toPoint) <= 40) return true;
-
-  const delta = bearingDelta(
-    ctx.lastBearingDeg,
-    bearingBetween(startPoint, toPoint)
+  const destination = ctx.graph.nodes[step.toNode];
+  const bearing = bearingBetween(
+    { lat: start.lat, lng: start.lng },
+    { lat: destination.lat, lng: destination.lng }
   );
-  return ctx.turnDirection > 0 ? delta >= -20 : delta <= 20;
+
+  return Math.abs(bearingDelta(ctx.outboundBearingDeg, bearing)) <= 75;
 };
 
 export const ALL_FILTERS: StepFilter[] = [
@@ -90,15 +105,30 @@ export const ALL_FILTERS: StepFilter[] = [
   canReachHome,
   hasOnwardMove,
   legalCrossing,
+  avoidsStoplights,
   startsOutward,
 ];
 
-/** Out-and-back: retracing is expected, and every dead end is a turnaround. */
+/** Out-and-back: retracing is the mechanism, and dead ends are turnarounds. */
 export const OUT_AND_BACK_FILTERS: StepFilter[] = [
   isAllowedRoad,
   legalCrossing,
+  avoidsStoplights,
   startsOutward,
+  noTinyLoops,
 ];
+
+export const FILTER_NAMES = new Map<StepFilter, string>([
+  [notReused, "reused"],
+  [isAllowedRoad, "road"],
+  [withinBudget, "budget"],
+  [canReachHome, "unreachable"],
+  [hasOnwardMove, "deadend"],
+  [legalCrossing, "crossing"],
+  [avoidsStoplights, "light"],
+  [noTinyLoops, "tinyloop"],
+  [startsOutward, "wrongway"],
+]);
 
 export function passesAll(
   ctx: StepContext,
@@ -108,16 +138,7 @@ export function passesAll(
   return filters.every((filter) => filter(ctx, step));
 }
 
-export const FILTER_NAMES = new Map<StepFilter, string>([
-  [notReused, "reused"],
-  [isAllowedRoad, "road"],
-  [withinBudget, "budget"],
-  [canReachHome, "unreachable"],
-  [hasOnwardMove, "deadend"],
-  [legalCrossing, "crossing"],
-  [startsOutward, "wrongway"],
-]);
-
+/** Partition candidates into legal steps and named rejection counts. */
 export function partitionSteps(
   ctx: StepContext,
   steps: Step[],

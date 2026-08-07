@@ -13,6 +13,7 @@ export interface SearchOptions {
   attempts?: number;
   tolerance?: number;
   seed?: number;
+  avoidStoplights?: boolean;
 }
 
 interface BearingTally {
@@ -29,7 +30,12 @@ export function searchLoops(
   terrain: Terrain,
   options: SearchOptions = {}
 ): Loop[] {
-  const { attempts = 400, tolerance = 0.12, seed = 20260726 } = options;
+  const {
+    attempts = 400,
+    tolerance = 0.12,
+    seed = 20260726,
+    avoidStoplights = false,
+  } = options;
   const homeDistances = distancesFrom(graph, startNode, roads);
 
   const loops: Loop[] = [];
@@ -56,6 +62,7 @@ export function searchLoops(
       roads,
       terrain,
       outboundBearingDeg: bearing,
+      avoidStoplights,
       trace,
     });
 
@@ -84,7 +91,12 @@ function searchOutAndBack(
   terrain: Terrain,
   options: SearchOptions
 ): Loop[] {
-  const { attempts = 400, tolerance = 0.12, seed = 20260726 } = options;
+  const {
+    attempts = 400,
+    tolerance = 0.12,
+    seed = 20260726,
+    avoidStoplights = false,
+  } = options;
   const homeDistances = distancesFrom(graph, startNode, roads);
 
   const routes: Loop[] = [];
@@ -99,6 +111,7 @@ function searchOutAndBack(
       roads,
       terrain,
       outboundBearingDeg: ((i % BEARING_COUNT) * 360) / BEARING_COUNT,
+      avoidStoplights,
     });
     if (route) routes.push({ ...route, shape: "out-and-back" });
   }

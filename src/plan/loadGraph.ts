@@ -11,8 +11,17 @@ export async function loadGraph(
   radiusM: number,
   elevation: ElevationSource
 ): Promise<RoadGraph> {
+  let t = Date.now();
   const elements = await fetchRoadElements(center, radiusM);
+  console.log(`    load: fetch ${Date.now() - t}ms`);
+
+  t = Date.now();
   const graph = buildGraph(elements);
+  console.log(`    load: build ${Date.now() - t}ms`);
+
+  t = Date.now();
   attachElevation(graph, elevation);
+  console.log(`    load: elevation ${Date.now() - t}ms`);
+
   return graph;
 }

@@ -7,6 +7,7 @@ export interface GraphNode {
   edges: number[];
   signalized: boolean;
   arterial: boolean;
+  stoplight: boolean; // an actual traffic light, not just any signal tag
 }
 
 export interface GraphEdge {
@@ -17,6 +18,7 @@ export interface GraphEdge {
   meters: number;
   type: string;
   lanes: number;
+  sidewalkSides: 0 | 1 | 2;
   quietness: number;
   crossable: boolean; // 2 lanes or fewer, minor class
   grade: number; // mean absolute gradient, set later
@@ -28,6 +30,7 @@ export interface ParsedWay {
   lanes: number;
   quietness: number;
   crossable: boolean;
+  sidewalkSides: 0 | 1 | 2;
   geometry: LatLng[];
 }
 
@@ -38,4 +41,5 @@ export interface EdgeSpec {
   lanes: number;
   quietness: number;
   crossable: boolean;
+  sidewalkSides: 0 | 1 | 2;
 }

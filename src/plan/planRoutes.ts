@@ -38,11 +38,29 @@ export async function planRoutes(
   const targetM = request.miles * MILES_TO_M;
   const radiusM = Math.max(MIN_FETCH_RADIUS_M, targetM / 3);
 
+  const t0 = Date.now();
   const elevation = await deps.elevationGrid(request.start, radiusM);
+  const t1 = Date.now();
   const graph = await loadGraph(request.start, radiusM, elevation);
+  {
+    const lights = graph.nodes.filter((n) => n.stoplight);
+    console.log(`  ${lights.length} flagged stoplights:`);
+    for (const n of lights) {
+      console.log(
+        `    ${n.lat.toFixed(5)},${n.lng.toFixed(5)} degree ${n.edges.length}`
+      );
+    }
+  }
+  const t2 = Date.now();
   logGrades(graph);
 
-  const startNode = findStartNode(graph, request.start, request.roads);
+  const startNode = findStartNode(
+    graph,
+    request.start,
+    request.roads,
+    500,
+    (id) => !request.avoidStoplights || !graph.nodes[id].stoplight
+  );
   if (startNode === null) {
     throw new Error(
       noNetworkNearby(request, totalRunnableMeters(graph, request.roads))
@@ -82,7 +100,11 @@ export async function planRoutes(
     targetM,
     request.roads,
     request.terrain,
-    { attempts, tolerance }
+    { attempts, tolerance, avoidStoplights: request.avoidStoplights }
+  );
+  const t3 = Date.now();
+  console.log(
+    `  timing: elevation ${t1 - t0}ms, graph ${t2 - t1}ms, search ${t3 - t2}ms`
   );
   if (!found.length) {
     throw new Error(noLoopFound(request));
