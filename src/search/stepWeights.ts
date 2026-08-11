@@ -53,6 +53,7 @@ export const prefersProgress: StepWeight = (ctx, step) =>
 
 /** Seek or avoid gradient. */
 export const matchesTerrain: StepWeight = (ctx, step) => {
+  if (ctx.terrain === "any") return 1;
   const grade = Math.min(ctx.graph.edges[step.edgeId].grade, 0.15);
   if (ctx.terrain === "flat") return 1 / (1 + grade * 40);
   if (ctx.terrain === "hilly") return 1 + grade * 40;

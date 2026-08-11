@@ -20,6 +20,7 @@ export interface OutAndBackOptions {
   terrain: Terrain;
   outboundBearingDeg: number;
   avoidStoplights: boolean;
+  lowTraffic: boolean;
 }
 
 /**
@@ -37,7 +38,15 @@ export function walkOutAndBack(options: OutAndBackOptions): Loop | null {
 
   for (let step = 0; step < MAX_STEPS; step++) {
     if (state.traveledM >= minOutboundM) {
-      return mirror(graph, startNode, state.edgeIds, state.traveledM);
+      // Far enough — but a runner doesn't U-turn mid-block. Finish the
+      // street: keep going straight while it continues and budget allows,
+      // and turn around where it ends — a dead end or a corner.
+      const onward = straightContinuation(state, maxOutboundM);
+      if (!onward) {
+        return mirror(graph, startNode, state.edgeIds, state.traveledM);
+      }
+      advance(state, onward, graph);
+      continue;
     }
 
     const chosen = chooseNextStep(state, random, maxOutboundM);
@@ -69,6 +78,7 @@ function initialState(
     currentNode: startNode,
     previousEdge: undefined,
     usedDirections: new Set<number>(),
+    lastVisitAtM: new Map([[startNode, 0]]),
     edgeIds: [],
     traveledM: 0,
     maxTotalM: maxOutboundM,
@@ -83,7 +93,7 @@ function initialState(
     targetM,
     outboundBearingDeg: options.outboundBearingDeg,
     avoidStoplights: options.avoidStoplights,
-    lastVisitAtM: new Map([[startNode, 0]]),
+    lowTraffic: options.lowTraffic,
   };
 }
 
@@ -112,6 +122,32 @@ function chooseNextStep(
     (step) => weightOf(state, step) * (0.3 + random() * 1.7)
   );
   return pickStep(legal, weights, random);
+}
+
+/**
+ * The legal straight-ahead step, if the street continues and budget allows.
+ * Used past the turnaround minimum so routes end where streets end —
+ * a dead end or a corner — never a U-turn in the middle of a block.
+ */
+function straightContinuation(
+  state: WalkState,
+  maxOutboundM: number
+): Step | null {
+  const all = candidateSteps(
+    state.graph,
+    state.currentNode,
+    state.previousEdge
+  );
+
+  const viable = all.filter(
+    (step) =>
+      step.isStraight &&
+      step.edgeId !== state.previousEdge &&
+      state.traveledM + step.meters <= maxOutboundM
+  );
+
+  const { legal } = partitionSteps(state, viable, OUT_AND_BACK_FILTERS);
+  return legal[0] ?? null;
 }
 
 function advance(state: WalkState, step: Step, graph: RoadGraph): void {

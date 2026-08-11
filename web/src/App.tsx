@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RouteMap } from "./components/RouteMap";
 import { RouteControls } from "./components/RouteControls";
 import { RouteList } from "./components/RouteList";
@@ -12,6 +12,8 @@ import "./App.css";
 const FALLBACK_START = { lat: 34.0522, lng: -118.2437 };
 
 export default function App() {
+  const PAGE_SIZE = 5;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { state: geoState, request: requestLocation } = useGeolocation();
   const {
     request,
@@ -25,10 +27,17 @@ export default function App() {
   } = useRoutePlanner({
     start: FALLBACK_START,
     miles: 5,
-    terrain: "rolling",
-    roads: "side-roads",
+    terrain: "any",
+    roads: "any",
     avoidStoplights: false,
+    lowTraffic: false,
   });
+  const findRoutes = () => {
+    setVisibleCount(PAGE_SIZE); // a fresh plan starts back at page one
+    plan();
+  };
+
+  const visibleRoutes = routes.slice(0, visibleCount);
 
   useEffect(() => {
     if (geoState.status === "ready") {
@@ -51,7 +60,7 @@ export default function App() {
         <ErrorBoundary>
           <RouteMap
             start={request.start}
-            routes={routes}
+            routes={visibleRoutes}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
@@ -66,16 +75,18 @@ export default function App() {
         <RouteControls
           value={request}
           onChange={setRequest}
-          onSubmit={plan}
+          onSubmit={findRoutes}
           loading={loading}
         />
 
         {error && <p className="error">{error}</p>}
 
         <RouteList
-          routes={routes}
+          routes={visibleRoutes}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          hasMore={routes.length > visibleCount}
+          onLoadMore={() => setVisibleCount((count) => count + PAGE_SIZE)}
         />
 
         <OpenInMaps route={selected} />

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { RouteRequest } from "../api";
 
 interface Props {
@@ -18,10 +19,23 @@ const TERRAINS = [
 const ROADS = [
   { value: "side-roads", label: "Side roads" },
   { value: "trails", label: "Trails" },
-  { value: "any", label: "Any" },
 ] as const;
 
+const FILTER_DEFAULTS = {
+  terrain: "any",
+  roads: "any",
+  avoidStoplights: false,
+  lowTraffic: false,
+} as const;
+
 export function RouteControls({ value, onChange, onSubmit, loading }: Props) {
+  // Desktop sidebar has the room — start open there, collapsed on phones.
+  const [filtersOpen, setFiltersOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches
+  );
+
   const set = <K extends keyof RouteRequest>(key: K, next: RouteRequest[K]) =>
     onChange({ ...value, [key]: next });
 
@@ -31,10 +45,16 @@ export function RouteControls({ value, onChange, onSubmit, loading }: Props) {
       Math.min(20, Math.max(0.5, Number((value.miles + delta).toFixed(1))))
     );
 
+  const activeFilters =
+    Number(value.terrain !== FILTER_DEFAULTS.terrain) +
+    Number(value.roads !== FILTER_DEFAULTS.roads) +
+    Number(value.avoidStoplights !== FILTER_DEFAULTS.avoidStoplights) +
+    Number(value.lowTraffic !== FILTER_DEFAULTS.lowTraffic);
+
   return (
     <div className="controls">
       <div className="control-row">
-        <span className="control-label">Distance</span>
+        <span className="control-label">{value.miles.toFixed(1)} mi</span>
         <div className="chips">
           <button
             className="chip stepper"
@@ -59,63 +79,103 @@ export function RouteControls({ value, onChange, onSubmit, loading }: Props) {
           >
             +
           </button>
-          <span className="chips-value">{value.miles.toFixed(1)} mi</span>
         </div>
       </div>
 
-      <div className="control-row">
-        <span className="control-label">Terrain</span>
-        <div className="chips">
-          {TERRAINS.map((option) => (
-            <button
-              key={option.value}
-              className={
-                value.terrain === option.value ? "chip active" : "chip"
-              }
-              onClick={() => set("terrain", option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <button
+        className="filters-toggle"
+        onClick={() => setFiltersOpen((open) => !open)}
+        aria-expanded={filtersOpen}
+      >
+        <span className="filters-label">
+          Filters
+          {activeFilters > 0 && <span className="badge">{activeFilters}</span>}
+        </span>
+        <span className="filters-chevron">{filtersOpen ? "▴" : "▾"}</span>
+      </button>
 
-      <div className="control-row">
-        <span className="control-label">Roads</span>
-        <div className="chips">
-          {ROADS.map((option) => (
-            <button
-              key={option.value}
-              className={value.roads === option.value ? "chip active" : "chip"}
-              onClick={() => set("roads", option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {filtersOpen && (
+        <div className="filters">
+          <div className="control-row">
+            <span className="control-label">Terrain</span>
+            <div className="chips">
+              {TERRAINS.map((option) => (
+                <button
+                  key={option.value}
+                  className={
+                    value.terrain === option.value ? "chip active" : "chip"
+                  }
+                  onClick={() =>
+                    set(
+                      "terrain",
+                      value.terrain === option.value ? "any" : option.value
+                    )
+                  }
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      <div className="control-row">
-        <span className="control-label">Lights</span>
-        <div className="chips">
-          <button
-            className={
-              value.avoidStoplights ? "chip lights active" : "chip lights"
-            }
-            onClick={() => set("avoidStoplights", !value.avoidStoplights)}
-            aria-pressed={value.avoidStoplights}
-            aria-label="No stoplights"
-          >
-            <span className="lights-desktop">
-              <StoplightIcon />
-              <span>No stoplights</span>
-            </span>
-            <span className="lights-mobile">
-              <NoStoplightIcon />
-            </span>
-          </button>
+          <div className="control-row">
+            <span className="control-label">Roads</span>
+            <div className="chips">
+              {ROADS.map((option) => (
+                <button
+                  key={option.value}
+                  className={
+                    value.roads === option.value ? "chip active" : "chip"
+                  }
+                  onClick={() =>
+                    set(
+                      "roads",
+                      value.roads === option.value ? "any" : option.value
+                    )
+                  }
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="control-row">
+            <span className="control-label">Lights</span>
+            <div className="chips">
+              <button
+                className={
+                  value.avoidStoplights ? "chip lights active" : "chip lights"
+                }
+                onClick={() => set("avoidStoplights", !value.avoidStoplights)}
+                aria-pressed={value.avoidStoplights}
+                aria-label="No stoplights"
+              >
+                <span className="lights-desktop">
+                  <StoplightIcon />
+                  <span>No stoplights</span>
+                </span>
+                <span className="lights-mobile">
+                  <NoStoplightIcon />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="control-row">
+            <span className="control-label">Traffic</span>
+            <div className="chips">
+              <button
+                className={value.lowTraffic ? "chip active" : "chip"}
+                onClick={() => set("lowTraffic", !value.lowTraffic)}
+                aria-pressed={value.lowTraffic}
+              >
+                Low traffic
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <button className="primary" onClick={onSubmit} disabled={loading}>
         {loading ? "Finding routes…" : "Find routes"}

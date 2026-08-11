@@ -1,7 +1,12 @@
 import { parseWays, parseSignalNodes } from "./parseWays";
 import { findJunctions } from "./findJunctions";
 import { splitAtJunctions } from "./splitAtJunctions";
-import { markSignalized, markArterial, markStoplights } from "./markNodes";
+import {
+  markSignalized,
+  markArterial,
+  markStoplights,
+  markFastRoads,
+} from "./markNodes";
 import { findParallels } from "./findParallels";
 import { RoadGraph } from "./RoadGraph";
 import { parseStoplightNodes } from "./parseWays";
@@ -41,15 +46,22 @@ export function buildGraph(elements: any[]): RoadGraph {
   markSignalized(graph, signalKeys);
   markArterial(graph);
   markStoplights(graph, stoplightKeys);
+  markFastRoads(graph);
+  console.log(
+    `  ${graph.edges.filter((e) => e.fastRoad).length} fast-road edges`
+  );
   t = mark("mark", t);
 
   graph.parallel = findParallels(graph);
   mark("parallels", t);
   const pairs = graph.parallel.reduce((n, list) => n + list.length, 0);
   const twoSided = graph.edges.filter((e) => e.sidewalkSides === 2).length;
+  const calmBonus = graph.edges.filter(
+    (e) => e.loopable && e.sidewalkSides !== 2
+  ).length;
   console.log(
     `  graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges, ` +
-      `${twoSided} two-sided, ${pairs} parallel pairs`
+      `${twoSided} two-sided, ${calmBonus} calm-street bonus, ${pairs} parallel pairs`
   );
 
   return graph;

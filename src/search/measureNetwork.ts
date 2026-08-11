@@ -1,8 +1,7 @@
 import { distancesFrom } from "./reachability";
-import { isRunnable } from "./runnable";
+import { isRunnable, isTrail } from "./runnable";
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { RoadPref } from "./types";
-import { isTrail } from "./runnable";
 
 export interface NetworkExtent {
   /** Edges of this kind anywhere in the fetched area. */
@@ -16,9 +15,17 @@ export interface NetworkExtent {
 export function measureNetwork(
   graph: RoadGraph,
   startNode: number,
-  roads: RoadPref
+  roads: RoadPref,
+  avoidStoplights = false,
+  lowTraffic = false
 ): NetworkExtent {
-  const distances = distancesFrom(graph, startNode, roads);
+  const distances = distancesFrom(
+    graph,
+    startNode,
+    roads,
+    avoidStoplights,
+    lowTraffic
+  );
 
   let nearbyMeters = 0;
   let connectedMeters = 0;
@@ -26,6 +33,7 @@ export function measureNetwork(
 
   for (const edge of graph.edges) {
     if (!isRunnable(edge, roads)) continue;
+    if (lowTraffic && edge.fastRoad) continue;
     nearbyMeters += edge.meters;
 
     const reach = Math.min(distances[edge.from], distances[edge.to]);
@@ -47,11 +55,20 @@ export function totalRunnableMeters(graph: RoadGraph, roads: RoadPref): number {
   return meters;
 }
 
+/** How much genuine trail you can reach, travelling over the hybrid network. */
 export function measureTrails(
   graph: RoadGraph,
-  startNode: number
+  startNode: number,
+  avoidStoplights = false,
+  lowTraffic = false
 ): NetworkExtent {
-  const distances = distancesFrom(graph, startNode, "trails");
+  const distances = distancesFrom(
+    graph,
+    startNode,
+    "trails",
+    avoidStoplights,
+    lowTraffic
+  );
 
   let nearbyMeters = 0;
   let connectedMeters = 0;

@@ -4,6 +4,8 @@ import {
   quietnessOf,
   isCrossable,
   sidewalkSides,
+  isFastRoad,
+  isCalmStreet,
 } from "./classifyRoad";
 import { coordKey } from "./coordKey";
 import type { ParsedWay } from "./types";
@@ -21,12 +23,15 @@ export function parseWays(elements: any[]): ParsedWay[] {
     const type = tags.highway;
     const lanes = laneCount(tags);
 
+    const sides = sidewalkSides(tags);
     ways.push({
       type,
       lanes,
       quietness: quietnessOf(tags),
       crossable: isCrossable(type, lanes),
-      sidewalkSides: sidewalkSides(tags),
+      sidewalkSides: sides,
+      loopable: sides === 2 || isCalmStreet(tags),
+      fastRoad: isFastRoad(tags),
       geometry: geometry.map((g: any) => ({ lat: g.lat, lng: g.lon })),
     });
   }

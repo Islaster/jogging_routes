@@ -42,3 +42,10 @@ export function markStoplights(
     }
   }
 }
+
+/** Flag nodes where a fast road passes — its corners and crossings. */
+export function markFastRoads(graph: RoadGraph): void {
+  for (const node of graph.nodes) {
+    node.fastRoad = node.edges.some((id) => graph.edges[id].fastRoad);
+  }
+}

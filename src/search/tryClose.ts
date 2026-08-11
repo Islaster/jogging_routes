@@ -23,7 +23,8 @@ export function tryClose(
   maxTotalM: number,
   roads: RoadPref,
   edgeCost?: (edgeId: number) => number,
-  avoidStoplights = false
+  avoidStoplights = false,
+  lowTraffic = false
 ): CloseResult {
   const home = pathHome(
     graph,
@@ -32,7 +33,8 @@ export function tryClose(
     usedDirections,
     roads,
     edgeCost,
-    avoidStoplights
+    avoidStoplights,
+    lowTraffic
   );
   if (!home) return { status: "keep-walking" };
 

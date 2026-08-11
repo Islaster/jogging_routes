@@ -19,6 +19,10 @@ const MAJOR_CLASSES = new Set(["trunk", "primary", "secondary"]);
 
 const NO_SIDEWALK = new Set(["no", "none"]);
 
+const FAST_CLASSES = new Set(["trunk", "primary"]);
+const FAST_MPH = 40;
+const CALM_MPH = 20;
+
 const hasWalk = (v: string | undefined): boolean =>
   v !== undefined && !NO_SIDEWALK.has(v);
 
@@ -94,4 +98,31 @@ export function quietnessOf(tags: Record<string, string>): number {
  */
 export function isCrossable(type: string, lanes: number): boolean {
   return lanes < 3 && !MAJOR_CLASSES.has(type);
+}
+
+/** Parse OSM maxspeed ("35 mph", "50") to mph. Null when untagged/unparseable. */
+export function maxspeedMph(tags: Record<string, string>): number | null {
+  const raw = tags.maxspeed;
+  if (!raw) return null;
+  const value = parseInt(raw, 10);
+  if (!Number.isFinite(value)) return null;
+  return /mph/i.test(raw) ? value : Math.round(value * 0.621371);
+}
+
+/** Hostile to joggers: tagged fast, or a big class with no tag to soften it. */
+export function isFastRoad(tags: Record<string, string>): boolean {
+  const mph = maxspeedMph(tags);
+  if (mph !== null) return mph >= FAST_MPH;
+  return FAST_CLASSES.has(tags.highway);
+}
+
+/**
+ * Slow enough that the street itself serves as the return path —
+ * a posted limit of 20 mph or less. A fallback alongside sidewalk
+ * certification, never a replacement: untagged streets don't qualify,
+ * because an absent sign is not a slow sign.
+ */
+export function isCalmStreet(tags: Record<string, string>): boolean {
+  const mph = maxspeedMph(tags);
+  return mph !== null && mph <= CALM_MPH;
 }

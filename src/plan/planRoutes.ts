@@ -2,8 +2,8 @@ import { loadGraph } from "./loadGraph";
 import { findStartNode } from "../search/startNode";
 import { searchLoops } from "../search/searchLoops";
 import { dedupeLoops } from "./dedupeLoops";
-import { diversify } from "./diversify";
 import { filterByTerrain } from "./filterByTerrain";
+import { isRunnable } from "../search/runnable";
 import { enrichLoop } from "./enrichLoop";
 import { sectorOf } from "./sectorOf";
 import {
@@ -19,9 +19,11 @@ import {
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { RouteRequest, ScoredRoute } from "../types";
 import type { PlannerDeps } from "./deps";
+import { orderByNovelty } from "./orderByNovelty";
 
 const MILES_TO_M = 1609.344;
 const MIN_FETCH_RADIUS_M = 800;
+const MAX_ROUTES = 25;
 
 export interface PlanOptions {
   count?: number;
@@ -75,7 +77,12 @@ export async function planRoutes(
   );
 
   if (request.roads === "trails") {
-    const trails = measureTrails(graph, startNode);
+    const trails = measureTrails(
+      graph,
+      startNode,
+      request.avoidStoplights,
+      request.lowTraffic
+    );
     console.log(
       `  trails: ${Math.round(trails.connectedMeters)}m reachable ` +
         `of ${Math.round(trails.nearbyMeters)}m nearby`
@@ -85,7 +92,13 @@ export async function planRoutes(
     }
   }
 
-  const extent = measureNetwork(graph, startNode, request.roads);
+  const extent = measureNetwork(
+    graph,
+    startNode,
+    request.roads,
+    request.avoidStoplights,
+    request.lowTraffic
+  );
   console.log(
     `  ${request.roads}: ${Math.round(extent.connectedMeters)}m connected ` +
       `of ${Math.round(extent.nearbyMeters)}m nearby`
@@ -100,7 +113,12 @@ export async function planRoutes(
     targetM,
     request.roads,
     request.terrain,
-    { attempts, tolerance, avoidStoplights: request.avoidStoplights }
+    {
+      attempts,
+      tolerance,
+      avoidStoplights: request.avoidStoplights,
+      lowTraffic: request.lowTraffic,
+    }
   );
   const t3 = Date.now();
   console.log(
@@ -141,18 +159,85 @@ export async function planRoutes(
     `  terrain pool: ${terrainPool.length} of ${distinct.length} loops`
   );
 
-  const picked = diversify(
-    terrainPool,
-    request.start,
-    count,
-    (loop) => scored.get(loop)!.score
-  );
+  const ordered = orderByNovelty(terrainPool, scored, graph);
+  // TEMP: 1st St corridor west of Wilton — anchored on surveyed coordinates.
+  {
+    const A = { lat: 34.07303570576471, lng: -118.31348663194157 };
+    const B = { lat: 34.07304945977296, lng: -118.3145592905927 };
+    const M = 111320;
+    const cosLat = Math.cos((A.lat * Math.PI) / 180);
+    const bx = (B.lng - A.lng) * cosLat * M;
+    const by = (B.lat - A.lat) * M;
+    const len2 = bx * bx + by * by;
 
-  logPicked(picked, request, scored);
+    const along = (lat: number, lng: number) => {
+      const px = (lng - A.lng) * cosLat * M;
+      const py = (lat - A.lat) * M;
+      const t = (px * bx + py * by) / len2;
+      return { t, d: Math.hypot(px - t * bx, py - t * by) };
+    };
 
-  return picked
-    .map((loop) => scored.get(loop)!)
-    .sort((a, b) => b.score - a.score);
+    const bandIds: number[] = [];
+    graph.edges.forEach((edge, id) => {
+      const a = graph.nodes[edge.from];
+      const b = graph.nodes[edge.to];
+      const { t, d } = along((a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
+      if (d <= 25 && t >= -0.3 && t <= 6) bandIds.push(id);
+    });
+
+    const band = new Set(bandIds);
+    const totalM = bandIds.reduce((s, id) => s + graph.edges[id].meters, 0);
+    const kinds = bandIds
+      .map(
+        (id) => `${graph.edges[id].type}:${Math.round(graph.edges[id].meters)}m`
+      )
+      .join(" ");
+    console.log(
+      `  1st St corridor: ${bandIds.length} edges (${kinds}) = ${Math.round(
+        totalM
+      )}m`
+    );
+
+    const covered = new Set<number>();
+    let bestRunM = 0;
+    let bestRunEdges = 0;
+    for (const loop of distinct) {
+      let runM = 0;
+      let runEdges = 0;
+      for (const id of loop.edgeIds) {
+        if (band.has(id)) {
+          covered.add(id);
+          runM += graph.edges[id].meters;
+          runEdges++;
+          if (runM > bestRunM) {
+            bestRunM = runM;
+            bestRunEdges = runEdges;
+          }
+        } else {
+          runM = 0;
+          runEdges = 0;
+        }
+      }
+    }
+    console.log(
+      `  1st St coverage: ${covered.size}/${bandIds.length} edges touched; ` +
+        `longest run ${bestRunEdges} edges / ${Math.round(bestRunM)}m across ${
+          distinct.length
+        } loops`
+    );
+    const poolCovered = new Set<number>();
+    for (const loop of terrainPool) {
+      for (const id of loop.edgeIds) if (band.has(id)) poolCovered.add(id);
+    }
+    console.log(
+      `  1st St in terrain pool: ${poolCovered.size}/${bandIds.length} edges ` +
+        `(pool ${terrainPool.length} of ${distinct.length})`
+    );
+  }
+
+  logPicked(ordered.slice(0, count), request, scored);
+
+  return ordered.map((loop) => scored.get(loop)!);
 }
 
 /** Are grades varied enough for the terrain preference to act on? */

@@ -3,7 +3,7 @@ export interface LatLng {
   lng: number;
 }
 
-export type Terrain = "flat" | "rolling" | "hilly";
+export type Terrain = "flat" | "rolling" | "hilly" | "any";
 export type RoadPref = "side-roads" | "any" | "trails";
 
 export interface RouteRequest {
@@ -12,6 +12,7 @@ export interface RouteRequest {
   terrain: Terrain;
   roads: RoadPref;
   avoidStoplights: boolean;
+  lowTraffic: boolean;
 }
 
 export interface RawRoute {

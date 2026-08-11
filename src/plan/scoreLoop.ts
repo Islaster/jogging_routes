@@ -7,7 +7,7 @@ export interface Breakdown {
   roads: number;
 }
 
-const TERRAIN_BANDS: Record<Terrain, [number, number]> = {
+const TERRAIN_BANDS: Record<Exclude<Terrain, "any">, [number, number]> = {
   flat: [0, 35],
   rolling: [35, 90],
   hilly: [90, 400],
@@ -33,6 +33,7 @@ function scoreDistance(actual: number, target: number): number {
 }
 
 function scoreTerrain(ftPerMile: number, terrain: Terrain): number {
+  if (terrain === "any") return 1; // unconstrained: every loop matches equally
   const [low, high] = TERRAIN_BANDS[terrain];
   if (ftPerMile >= low && ftPerMile <= high) return 1;
   const distance = ftPerMile < low ? low - ftPerMile : ftPerMile - high;

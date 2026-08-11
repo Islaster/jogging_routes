@@ -36,6 +36,7 @@ export interface StepContext {
   /** Compass bearing this walk was assigned to head toward. */
   outboundBearingDeg: number;
   avoidStoplights: boolean;
+  lowTraffic: boolean;
 }
 
 /** One candidate step, with the geometry a filter or weight might want. */

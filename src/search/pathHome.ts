@@ -14,10 +14,10 @@ export interface HomePath {
 
 /**
  * Shortest route back to `destination` over runnable edges whose direction
- * hasn't been spent — coming home on the other sidewalk is legal where the
- * data certifies it. Obeys the same transition rules as the outbound walk:
- * no straight-through at unsignalized arterial nodes, and none at
- * stoplights when avoiding them.
+ * hasn't been spent. Obeys the same transition rules as the outbound walk:
+ * no straight-through at unsignalized arterial nodes, none at stoplights
+ * when avoiding them, and in low-traffic mode no running along or crossing
+ * a fast road at all.
  */
 export function pathHome(
   graph: RoadGraph,
@@ -26,7 +26,8 @@ export function pathHome(
   forbiddenDirections: Set<number>,
   roads: RoadPref,
   edgeCost: (edgeId: number) => number = () => 1,
-  avoidStoplights = false
+  avoidStoplights = false,
+  lowTraffic = false
 ): HomePath | null {
   const count = graph.nodes.length;
   const distance = new Float64Array(count).fill(Infinity);
@@ -49,6 +50,7 @@ export function pathHome(
       if (forbiddenDirections.has(directionKey(graph, edgeId, node))) continue;
       const edge = graph.edges[edgeId];
       if (!isRunnable(edge, roads)) continue;
+      if (lowTraffic && edge.fastRoad) continue; // never run along a fast road
 
       const next = graph.other(edgeId, node);
 
@@ -60,7 +62,8 @@ export function pathHome(
           previousEdge,
           edge,
           next,
-          avoidStoplights
+          avoidStoplights,
+          lowTraffic
         )
       ) {
         continue;
@@ -87,7 +90,8 @@ function blocksStraightThrough(
   previousEdge: number,
   edge: RoadGraph["edges"][number],
   next: number,
-  avoidStoplights: boolean
+  avoidStoplights: boolean,
+  lowTraffic: boolean
 ): boolean {
   const crossingArterial =
     here.arterial &&
@@ -95,8 +99,9 @@ function blocksStraightThrough(
     graph.edges[previousEdge].crossable &&
     edge.crossable;
   const waitingAtLight = avoidStoplights && here.stoplight;
+  const crossingFastRoad = lowTraffic && here.fastRoad;
 
-  if (!crossingArterial && !waitingAtLight) return false;
+  if (!crossingArterial && !waitingAtLight && !crossingFastRoad) return false;
 
   const from = graph.nodes[graph.other(previousEdge, here.id)];
   const toward = graph.nodes[next];

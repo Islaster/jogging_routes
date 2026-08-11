@@ -1,6 +1,6 @@
 import type { RouteRequest, RoadPref, Terrain } from "../types";
 
-const TERRAINS: Terrain[] = ["flat", "rolling", "hilly"];
+const TERRAINS: Terrain[] = ["flat", "rolling", "hilly", "any"];
 const ROADS: RoadPref[] = ["side-roads", "any", "trails"];
 
 /** ~50m grid — keeps precise coordinates out of logs and helps caches hit. */
@@ -30,5 +30,6 @@ export function parseRequest(body: unknown): RouteRequest {
     terrain: input.terrain,
     roads: input.roads,
     avoidStoplights: input?.avoidStoplights === true,
+    lowTraffic: input?.lowTraffic === true,
   };
 }

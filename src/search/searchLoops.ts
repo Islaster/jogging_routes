@@ -1,11 +1,11 @@
 import { mulberry32 } from "../geo/random";
 import { distancesFrom } from "./reachability";
 import { walkOnce } from "./walkOnce";
+import { walkOutAndBack } from "./walkOutAndBack";
+import { newTrace, printTrace } from "./trace";
+import { loopShape } from "./loopShape";
 import type { RoadGraph } from "../graph/RoadGraph";
 import type { Loop, RoadPref, Terrain } from "./types";
-import { loopShape } from "./loopShape";
-import { newTrace, printTrace } from "./trace";
-import { walkOutAndBack } from "./walkOutAndBack";
 
 const BEARING_COUNT = 16;
 
@@ -14,6 +14,7 @@ export interface SearchOptions {
   tolerance?: number;
   seed?: number;
   avoidStoplights?: boolean;
+  lowTraffic?: boolean;
 }
 
 interface BearingTally {
@@ -35,8 +36,16 @@ export function searchLoops(
     tolerance = 0.12,
     seed = 20260726,
     avoidStoplights = false,
+    lowTraffic = false,
   } = options;
-  const homeDistances = distancesFrom(graph, startNode, roads);
+
+  const homeDistances = distancesFrom(
+    graph,
+    startNode,
+    roads,
+    avoidStoplights,
+    lowTraffic
+  );
 
   const loops: Loop[] = [];
   const tallies = new Map<number, BearingTally>();
@@ -63,6 +72,7 @@ export function searchLoops(
       terrain,
       outboundBearingDeg: bearing,
       avoidStoplights,
+      lowTraffic,
       trace,
     });
 
@@ -77,12 +87,23 @@ export function searchLoops(
   logBearingYield(tallies);
   logLoopSpread(graph, startNode, loops, attempts);
 
-  if (loops.length >= 3 || roads !== "trails") return loops;
+  if (loops.length >= 3) return loops;
 
-  console.log("  no loops closed — falling back to out-and-back");
-  return searchOutAndBack(graph, startNode, targetM, roads, terrain, options);
+  console.log(
+    `  only ${loops.length} loops closed — adding out-and-back routes`
+  );
+  const outAndBacks = searchOutAndBack(
+    graph,
+    startNode,
+    targetM,
+    roads,
+    terrain,
+    options
+  );
+  return [...loops, ...outAndBacks];
 }
 
+/** Trails fallback: run out to halfway, come back the same way. */
 function searchOutAndBack(
   graph: RoadGraph,
   startNode: number,
@@ -96,8 +117,16 @@ function searchOutAndBack(
     tolerance = 0.12,
     seed = 20260726,
     avoidStoplights = false,
+    lowTraffic = false,
   } = options;
-  const homeDistances = distancesFrom(graph, startNode, roads);
+
+  const homeDistances = distancesFrom(
+    graph,
+    startNode,
+    roads,
+    avoidStoplights,
+    lowTraffic
+  );
 
   const routes: Loop[] = [];
   for (let i = 0; i < attempts; i++) {
@@ -112,6 +141,7 @@ function searchOutAndBack(
       terrain,
       outboundBearingDeg: ((i % BEARING_COUNT) * 360) / BEARING_COUNT,
       avoidStoplights,
+      lowTraffic,
     });
     if (route) routes.push({ ...route, shape: "out-and-back" });
   }

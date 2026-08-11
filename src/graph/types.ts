@@ -8,6 +8,7 @@ export interface GraphNode {
   signalized: boolean;
   arterial: boolean;
   stoplight: boolean; // an actual traffic light, not just any signal tag
+  fastRoad: boolean;
 }
 
 export interface GraphEdge {
@@ -19,6 +20,9 @@ export interface GraphEdge {
   type: string;
   lanes: number;
   sidewalkSides: 0 | 1 | 2;
+  /** May be traversed once per direction: two certified sidewalks, or ≤20 mph. */
+  loopable: boolean;
+  fastRoad: boolean;
   quietness: number;
   crossable: boolean; // 2 lanes or fewer, minor class
   grade: number; // mean absolute gradient, set later
@@ -31,6 +35,9 @@ export interface ParsedWay {
   quietness: number;
   crossable: boolean;
   sidewalkSides: 0 | 1 | 2;
+  /** May be traversed once per direction: two certified sidewalks, or ≤20 mph. */
+  loopable: boolean;
+  fastRoad: boolean;
   geometry: LatLng[];
 }
 
@@ -42,4 +49,7 @@ export interface EdgeSpec {
   quietness: number;
   crossable: boolean;
   sidewalkSides: 0 | 1 | 2;
+  /** May be traversed once per direction: two certified sidewalks, or ≤20 mph. */
+  loopable: boolean;
+  fastRoad: boolean;
 }

@@ -38,16 +38,20 @@ export const canReachHome: StepFilter = (ctx, step) =>
   ctx.homeDistances[step.toNode] !== Infinity;
 
 /**
- * Don't step somewhere with no way onward. Reversing out on the street's
- * other sidewalk counts as a way onward when the data certifies it exists.
+ * Don't step somewhere with no way onward. The edge being stepped along
+ * only counts as a way back when the data certifies its second sidewalk —
+ * on uncertain streets, blockDirection spends both directions at once,
+ * so the reverse we can see now won't exist after we arrive.
  */
 export const hasOnwardMove: StepFilter = (ctx, step) => {
   if (step.toNode === ctx.startNode) return true;
-  return ctx.graph.nodes[step.toNode].edges.some(
-    (id) =>
-      isRunnable(ctx.graph.edges[id], ctx.roads) &&
-      !ctx.usedDirections.has(directionKey(ctx.graph, id, step.toNode))
-  );
+  return ctx.graph.nodes[step.toNode].edges.some((id) => {
+    if (!isRunnable(ctx.graph.edges[id], ctx.roads)) return false;
+    if (id === step.edgeId && !ctx.graph.edges[id].loopable) {
+      return false;
+    }
+    return !ctx.usedDirections.has(directionKey(ctx.graph, id, step.toNode));
+  });
 };
 
 /**
@@ -98,6 +102,16 @@ export const startsOutward: StepFilter = (ctx, step) => {
   return Math.abs(bearingDelta(ctx.outboundBearingDeg, bearing)) <= 75;
 };
 
+/**
+ * Low-traffic mode: never run along a fast road and never cross one —
+ * signalized or not. Turning at its corner stays legal; the corner is
+ * where the quiet street ends, not where the danger is.
+ */
+export const avoidsFastRoads: StepFilter = (ctx, step) => {
+  if (!ctx.lowTraffic) return true;
+  if (ctx.graph.edges[step.edgeId].fastRoad) return false;
+  return !(ctx.graph.nodes[ctx.currentNode].fastRoad && step.isStraight);
+};
 export const ALL_FILTERS: StepFilter[] = [
   notReused,
   isAllowedRoad,
@@ -107,6 +121,7 @@ export const ALL_FILTERS: StepFilter[] = [
   legalCrossing,
   avoidsStoplights,
   startsOutward,
+  avoidsFastRoads,
 ];
 
 /** Out-and-back: retracing is the mechanism, and dead ends are turnarounds. */
@@ -116,6 +131,7 @@ export const OUT_AND_BACK_FILTERS: StepFilter[] = [
   avoidsStoplights,
   startsOutward,
   noTinyLoops,
+  avoidsFastRoads,
 ];
 
 export const FILTER_NAMES = new Map<StepFilter, string>([
@@ -128,6 +144,7 @@ export const FILTER_NAMES = new Map<StepFilter, string>([
   [avoidsStoplights, "light"],
   [noTinyLoops, "tinyloop"],
   [startsOutward, "wrongway"],
+  [avoidsFastRoads, "traffic"],
 ]);
 
 export function passesAll(

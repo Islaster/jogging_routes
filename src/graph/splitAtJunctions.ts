@@ -24,6 +24,8 @@ export function splitAtJunctions(
         quietness: way.quietness,
         crossable: way.crossable,
         sidewalkSides: way.sidewalkSides,
+        fastRoad: way.fastRoad,
+        loopable: way.loopable,
       });
       sliceStart = i;
     }

@@ -26,6 +26,7 @@ export interface WalkOptions {
   /** Compass direction this walk should head out toward. */
   outboundBearingDeg: number;
   avoidStoplights: boolean;
+  lowTraffic: boolean;
   trace?: WalkTrace;
 }
 
@@ -60,7 +61,8 @@ export function walkOnce(options: WalkOptions): Loop | null {
         maxTotalM,
         roads,
         homeCost,
-        options.avoidStoplights
+        options.avoidStoplights,
+        options.lowTraffic
       );
       if (result.status === "closed") {
         if (trace) {
@@ -105,6 +107,7 @@ function initialState(options: WalkOptions, maxTotalM: number): WalkState {
     currentNode: startNode,
     previousEdge: undefined,
     usedDirections: new Set<number>(),
+    lastVisitAtM: new Map([[startNode, 0]]),
     edgeIds: [],
     traveledM: 0,
     maxTotalM,
@@ -119,7 +122,7 @@ function initialState(options: WalkOptions, maxTotalM: number): WalkState {
     targetM,
     outboundBearingDeg: options.outboundBearingDeg,
     avoidStoplights: options.avoidStoplights,
-    lastVisitAtM: new Map([[startNode, 0]]),
+    lowTraffic: options.lowTraffic,
   };
 }
 
